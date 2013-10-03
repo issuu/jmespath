@@ -1,0 +1,33 @@
+Source: jmespath
+Maintainer: James Saryerwinnie <js@jamesls.com>
+Section: python
+Priority: optional
+Build-Depends: python-setuptools (>= 0.6b3), debhelper (>= 7), python-support (>= 0.8.4)
+Standards-Version: 3.8.4
+
+Package: python-jmespath
+Architecture: all
+Depends: ${misc:Depends}, ${python:Depends}, python-ply (= 3.4) | python3-ply (= 3.4)
+XB-Python-Version: ${python:Versions}
+Provides: ${python:Provides}
+Description: JSON Matching Expressions
+ JMESPath
+ ========
+ .
+ JMESPath allows you to declaratively specify how to extract
+ elements from a JSON document.
+ .
+ For example, given this document::
+ .
+     {"foo": {"bar": "baz"}}
+ .
+ The jmespath expression ``foo.bar`` will return "baz".
+ .
+ JMESPath also supports:
+ .
+ Referencing elements in a list.  Given the data::
+ .
+     {"foo": {"bar": ["one", "two"]}}
+ .
+ The expression: ``foo.bar[0]`` will return "one".
+ You can also reference all the items in a list using the ``*``
