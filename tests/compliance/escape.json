@@ -6,7 +6,8 @@
         "foo\"bar": "doublequote",
         "c:\\\\windows\\path": "windows",
         "/unix/path": "unix",
-        "\"\"\"": "threequotes"
+        "\"\"\"": "threequotes",
+        "bar": {"baz": "qux"}
      },
      "cases": [
          {
@@ -18,7 +19,7 @@
             "result": "space"
          },
          {
-            "expression": "\"foo\nbar\"",
+            "expression": "\"foo\\nbar\"",
             "result": "newline"
          },
          {
@@ -26,7 +27,7 @@
             "result": "doublequote"
          },
          {
-            "expression": "\"c:\\\\windows\\path\"",
+            "expression": "\"c:\\\\\\\\windows\\\\path\"",
             "result": "windows"
          },
          {
@@ -36,6 +37,10 @@
          {
             "expression": "\"\\\"\\\"\\\"\"",
             "result": "threequotes"
+         },
+         {
+            "expression": "\"bar\".\"baz\"",
+            "result": "qux"
          }
      ]
 }]

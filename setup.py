@@ -6,9 +6,25 @@ import sys
 from setuptools import setup, find_packages
 
 
+requires = ['ply==3.4']
+
+
+if sys.version_info[:2] == (2, 6):
+    # For python2.6 we have a few other dependencies.
+    # First we need an ordered dictionary so we use the
+    # 2.6 backport.
+    requires.append('ordereddict==1.1')
+    # Then we need simplejson.  This is because we need
+    # a json version that allows us to specify we want to
+    # use an ordereddict instead of a normal dict for the
+    # JSON objects.  The 2.7 json module has this.  For 2.6
+    # we need simplejson.
+    requires.append('simplejson==3.3.0')
+
+
 setup(
     name='jmespath',
-    version='0.0.2',
+    version='0.3.1',
     description='JSON Matching Expressions',
     long_description=open('README.rst').read(),
     author='James Saryerwinnie',
@@ -16,9 +32,7 @@ setup(
     url='https://github.com/boto/jmespath',
     scripts=['bin/jp'],
     packages=find_packages(exclude=['tests']),
-    install_requires=[
-        'ply==3.4',
-    ],
+    install_requires=requires,
     classifiers=(
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
@@ -28,7 +42,6 @@ setup(
         'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.2',
         'Programming Language :: Python :: 3.3',
     ),
 )

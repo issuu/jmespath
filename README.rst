@@ -1,7 +1,7 @@
 JMESPath
 ========
 
-JMESPath (pronounced "jaymz path") allows you to declaratively specify how to
+JMESPath (pronounced ``\ˈjāmz path\``) allows you to declaratively specify how to
 extract elements from a JSON document.
 
 For example, given this document::
@@ -25,7 +25,7 @@ syntax::
 The expression: ``foo.bar[*].name`` will return ["one", "two"].
 Negative indexing is also supported (-1 refers to the last element
 in the list).  Given the data above, the expression
-``foo.bar[-1].name`` will return ["two"].
+``foo.bar[-1].name`` will return "two".
 
 The ``*`` can also be used for hash types::
 
@@ -38,38 +38,15 @@ of features it does not currently support that may be added in the
 future.**
 
 
-Grammar
-=======
+Specification
+=============
 
-The grammar is specified using ABNF, as described in `RFC4234`_
+The grammar is specified using ABNF, as described in `RFC4234`_.
+You can find the most up to date grammar for JMESPath
+`here <http://jmespath.readthedocs.org/en/latest/specification.html#grammar>`__.
 
-::
-
-    expression        = sub-expression / index-expression / or-expression / identifier / "*"
-    sub-expression    = expression "." expression
-    or-expression     = expression "||" expression
-    index-expression  = expression bracket-specifier / bracket-specifier
-    bracket-specifier = "[" (number / "*") "]"
-    number            = [-]1*digit
-    digit             = "1" / "2" / "3" / "4" / "5" / "6" / "7" / "8" / "9" / "0"
-    identifier        = 1*char
-    char              = unescaped /
-                        escape (
-                            %x20-2F /    ; Space,!,",#,$,%,&,',(,),*,+,comma,-,.,/
-                            %x3A-40 /    ; :,;,<,=,>,?,@
-                            %x5B    /    ; Left bracket: [
-                            %x5C    /    ; Back slash: \
-                            %x5D    /    ; Right bracket: ]
-                            %x5E    /    ; Caret: ^
-                            %x60    /    ; Backtick: `
-                            %x7B-7E /    ; {,|,},~
-                            b       /    ; backspace
-                            n       /    ; new line
-                            f       /    ; form feed
-                            r       /    ; carriage return
-                            t       )    ; tab
-    escape            = %x5C   ; Back slash: \
-    unescaped         = %x30-39 / %x41-5A / %x5F / %x61-7A / %x7F-10FFFF
+You can read the full JMESPath specification
+`here http://jmespath.readthedocs.org/en/latest/specification.html`__.
 
 
 Testing
@@ -104,6 +81,14 @@ and reuse them to perform repeated searches::
 
 You can also use the ``jmespath.parser.Parser`` class directly
 if you want more control.
+
+
+Updating the Grammar
+====================
+
+If you are updating the grammar in ``parser.py`` you'll need to run
+``bin/gen-tables`` on both python2 and python3 to update the
+``jmespath/_lrtable.py`` and ``jmespath/_lrtable3.py`` files.
 
 
 .. _RFC4234: http://tools.ietf.org/html/rfc4234

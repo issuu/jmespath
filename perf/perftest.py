@@ -13,6 +13,7 @@ import json
 import sys
 
 from jmespath.parser import Parser
+from jmespath.lexer import LexerDefinition
 
 
 DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)))
@@ -24,13 +25,36 @@ def run_tests(tests):
     for test in tests:
         given = test['given']
         expression = test['expression']
+        lex_time = _lex_time(expression)
         parse_time = _parse_time(expression)
         search_time = _search_time(expression, given)
         sys.stdout.write(
-            "parse_time: %.8fms, search_time: %.8fms" % (
-            1000 * parse_time, 1000 * search_time))
-        sys.stdout.write(" description: %s" % test['description'])
+            "lex_time: %.8f, parse_time: %.8fms, search_time: %.8fms" % (
+                1000 * lex_time, 1000 * parse_time, 1000 * search_time))
+        sys.stdout.write(" description: %s " % test['description'])
         sys.stdout.write("name: %s\n" % test['name'])
+
+
+def _lex_time(expression):
+    import ply.lex
+    definitions = LexerDefinition
+    create_lexer = ply.lex.lex
+    best = float('inf')
+    for i in range(DEFAULT_NUM_LOOP):
+        start = time.time()
+        lexer = create_lexer(module=definitions(),
+                             debug=False,
+                             reflags=definitions.reflags)
+        lexer.input(expression)
+        while True:
+            token = lexer.token()
+            if token is None:
+                break
+        end = time.time()
+        total = end - start
+        if total < best:
+            best = total
+    return best
 
 
 def _search_time(expression, given):
@@ -63,22 +87,38 @@ def load_tests(filename):
     loaded = []
     with open(filename) as f:
         data = json.load(f)
+    if isinstance(data, list):
+        for i, d in enumerate(data):
+            _add_cases(d, loaded, '%s-%s' % (filename, i))
+    else:
+        _add_cases(data, loaded, filename)
+    return loaded
+
+
+def _add_cases(data, loaded, filename):
     for case in data['cases']:
-        current = {'description': data['description'],
+        current = {'description': data.get('description', filename),
                    'given': data['given'],
-                   'name': case['name'],
+                   'name': case.get('name', case['expression']),
                    'expression': case['expression'],
-                   'result': case['result']}
+                   'result': case.get('result')}
         loaded.append(current)
     return loaded
 
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--directory', default=DIRECTORY)
+    parser.add_argument('-f', '--filename')
+    args = parser.parse_args()
     collected_tests = []
-    for filename in os.listdir(DIRECTORY):
-        if filename.endswith('.json'):
-            collected_tests.extend(load_tests(filename))
+    if args.filename:
+        collected_tests.extend(load_tests(args.filename))
+    else:
+        for filename in os.listdir(args.directory):
+            if filename.endswith('.json'):
+                full_path = os.path.join(args.directory, filename)
+                collected_tests.extend(load_tests(full_path))
     run_tests(collected_tests)
 
 

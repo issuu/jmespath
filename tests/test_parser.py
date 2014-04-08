@@ -3,6 +3,9 @@
 from tests import unittest
 
 from jmespath import parser
+from jmespath import ast
+from jmespath import lexer
+from jmespath import compat
 
 
 class TestParser(unittest.TestCase):
@@ -27,6 +30,12 @@ class TestParser(unittest.TestCase):
         self.assertEqual(
             parsed.search({'foo': ['zero', 'one', 'two']}),
             'one')
+
+    def test_quoted_subexpression(self):
+        parsed = self.parser.parse('"foo"."bar"')
+        self.assertIsInstance(parsed.parsed, ast.SubExpression)
+        self.assertEqual(parsed.parsed.parent.name, 'foo')
+        self.assertEqual(parsed.parsed.child.name, 'bar')
 
     def test_wildcard(self):
         parsed = self.parser.parse('foo[*]')
@@ -57,9 +66,96 @@ class TestParser(unittest.TestCase):
         parsed = self.parser.parse('foo || bar')
         self.assertEqual(repr(parsed), 'ORExpression(Field(foo), Field(bar))')
 
+    def test_unicode_literals_escaped(self):
+        parsed = self.parser.parse(r'`"\u2713"`')
+        if compat.PY2:
+            self.assertEqual(repr(parsed), r'Literal(\u2713)')
+        else:
+            self.assertEqual(repr(parsed), u'Literal(\u2713)')
+
+    def test_unicode_pretty_print(self):
+        parsed = self.parser.parse(r'`"\u2713"`')
+        self.assertEqual(parsed.pretty_print(), u'Literal(\u2713)')
+
+    def test_multiselect(self):
+        parsed = self.parser.parse('foo.{bar: bar,baz: baz}')
+        self.assertEqual(
+            parsed.search({'foo': {'bar': 'bar', 'baz': 'baz', 'qux': 'qux'}}),
+            {'bar': 'bar', 'baz': 'baz'})
+
+    def test_multiselect_subexpressions(self):
+        parsed = self.parser.parse('foo.{"bar.baz": bar.baz, qux: qux}')
+        foo = parsed.search({'foo': {'bar': {'baz': 'CORRECT'}, 'qux': 'qux'}})
+        self.assertEqual(
+            parsed.search({'foo': {'bar': {'baz': 'CORRECT'}, 'qux': 'qux'}}),
+            {'bar.baz': 'CORRECT', 'qux': 'qux'})
+
+    def test_multiselect_with_all_quoted_keys(self):
+        parsed = self.parser.parse('foo.{"bar": bar.baz, "qux": qux}')
+        result = parsed.search({'foo': {'bar': {'baz': 'CORRECT'}, 'qux': 'qux'}})
+        self.assertEqual(result, {"bar": "CORRECT", "qux": "qux"})
+
+
+class TestErrorMessages(unittest.TestCase):
+
+    def setUp(self):
+        self.parser = parser.Parser()
+
+    def assert_error_message(self, expression, error_message,
+                             exception=parser.ParseError):
+        try:
+            self.parser.parse(expression)
+        except exception as e:
+            self.assertEqual(error_message, str(e))
+            return
+        except Exception as e:
+            self.fail(
+                "Unexpected error raised (%s: %s) for bad expression: %s" %
+                (e.__class__.__name__, e, expression))
+        else:
+            self.fail(
+                "ParseError not raised for bad expression: %s" % expression)
+
     def test_bad_parse(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(parser.ParseError):
             parsed = self.parser.parse('foo]baz')
+
+    def test_bad_parse_error_message(self):
+        error_message = (
+            'Invalid jmespath expression: Parse error at column 3 '
+            'near token "]" (RBRACKET) for expression:\n'
+            '"foo]baz"\n'
+            '    ^')
+        self.assert_error_message('foo]baz', error_message)
+
+    def test_bad_parse_error_message_with_multiselect(self):
+        error_message = (
+            'Invalid jmespath expression: Incomplete expression:\n'
+            '"foo.{bar: baz,bar: bar"\n'
+            '                       ^')
+        self.assert_error_message('foo.{bar: baz,bar: bar', error_message)
+
+    def test_bad_lexer_values(self):
+        error_message = (
+            'Bad jmespath expression: Bad token \'"bar\': '
+            'starting quote is missing the ending quote:\n'
+            'foo."bar\n'
+            '    ^')
+        self.assert_error_message('foo."bar', error_message,
+                                  exception=lexer.LexerError)
+
+    def test_bad_lexer_literal_value_with_json_object(self):
+        error_message = ('Bad jmespath expression: '
+                         'Bad token `{{}`:\n`{{}`\n^')
+        self.assert_error_message('`{{}`', error_message,
+                                  exception=lexer.LexerError)
+
+
+    def test_bad_unicode_string(self):
+        error_message = ('Bad jmespath expression: '
+                         'Invalid \\uXXXX escape:\n"\\uAZ12"\n^')
+        self.assert_error_message(r'"\uAZ12"', error_message,
+                                  exception=lexer.LexerError)
 
 
 class TestParserWildcards(unittest.TestCase):
@@ -112,27 +208,74 @@ class TestParserWildcards(unittest.TestCase):
         self.assertEqual(sorted(parsed.search(data)), sorted(['a', 'b', 'c']))
 
     def test_escape_sequences(self):
-        self.assertEqual(self.parser.parse('"foo\tbar"').search(
+        self.assertEqual(self.parser.parse(r'"foo\tbar"').search(
             {'foo\tbar': 'baz'}), 'baz')
-        self.assertEqual(self.parser.parse('"foo\nbar"').search(
+        self.assertEqual(self.parser.parse(r'"foo\nbar"').search(
             {'foo\nbar': 'baz'}), 'baz')
-        self.assertEqual(self.parser.parse('"foo\bbar"').search(
+        self.assertEqual(self.parser.parse(r'"foo\bbar"').search(
             {'foo\bbar': 'baz'}), 'baz')
-        self.assertEqual(self.parser.parse('"foo\fbar"').search(
+        self.assertEqual(self.parser.parse(r'"foo\fbar"').search(
             {'foo\fbar': 'baz'}), 'baz')
-        self.assertEqual(self.parser.parse('"foo\rbar"').search(
+        self.assertEqual(self.parser.parse(r'"foo\rbar"').search(
             {'foo\rbar': 'baz'}), 'baz')
 
     def test_consecutive_escape_sequences(self):
-        parsed = self.parser.parse('"foo\\nbar"')
+        parsed = self.parser.parse(r'"foo\\nbar"')
         self.assertEqual(parsed.search({'foo\\nbar': 'baz'}), 'baz')
 
-        parsed = self.parser.parse('"foo\n\t\rbar"')
+        parsed = self.parser.parse(r'"foo\n\t\rbar"')
         self.assertEqual(parsed.search({'foo\n\t\rbar': 'baz'}), 'baz')
 
     def test_escape_sequence_at_end_of_string_not_allowed(self):
         with self.assertRaises(ValueError):
             parsed = self.parser.parse('foobar\\')
+
+    def test_wildcard_with_multiselect(self):
+        parsed = self.parser.parse('foo.*.{a: a, b: b}')
+        data = {
+            'foo': {
+                'one': {
+                    'a': {'c': 'CORRECT', 'd': 'other'},
+                    'b': {'c': 'ALSOCORRECT', 'd': 'other'},
+                },
+                'two': {
+                    'a': {'c': 'CORRECT', 'd': 'other'},
+                    'c': {'c': 'WRONG', 'd': 'other'},
+                },
+            }
+        }
+        match = parsed.search(data)
+        self.assertEqual(len(match), 2)
+        self.assertIn('a', match[0])
+        self.assertIn('b', match[0])
+        self.assertIn('a', match[1])
+        self.assertIn('b', match[1])
+
+class TestMergedLists(unittest.TestCase):
+    def setUp(self):
+        self.parser = parser.Parser()
+        self.data = {
+            "foo": [
+                [["one", "two"], ["three", "four"]],
+                [["five", "six"], ["seven", "eight"]],
+                [["nine"], ["ten"]]
+            ]
+        }
+
+    def test_merge_with_indices(self):
+        parsed = self.parser.parse('foo[][0]')
+        match = parsed.search(self.data)
+        self.assertEqual(match, ["one", "three", "five", "seven",
+                                 "nine", "ten"])
+
+    def test_trailing_merged_operator(self):
+        parsed = self.parser.parse('foo[]')
+        match = parsed.search(self.data)
+        self.assertEqual(
+            match,
+            [["one", "two"], ["three", "four"],
+             ["five", "six"], ["seven", "eight"],
+             ["nine"], ["ten"]])
 
 
 class TestParserCaching(unittest.TestCase):
@@ -149,7 +292,15 @@ class TestParserCaching(unittest.TestCase):
         # cache but they should still be equal to compiled.
         for i in range(parser.Parser._max_size + 1):
             compiled2.append(p.parse('foo%s' % i))
+        self.assertEqual(len(compiled), len(compiled2))
         self.assertEqual(compiled, compiled2)
+
+
+class TestParserAddsExpressionAttribute(unittest.TestCase):
+    def test_expression_available_from_parser(self):
+        p = parser.Parser()
+        parsed = p.parse('foo.bar')
+        self.assertEqual(parsed.expression, 'foo.bar')
 
 
 if __name__ == '__main__':
